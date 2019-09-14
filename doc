@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+_term() {
+  >&2 echo "TERM"
+  exit 0
+}
+trap "_term" TERM
+
+_err() {
+  >&2 echo "err: $*"
+  exit 1
+}
+project=$(basename "$(pwd)")
+
+case "${1:-}" in
+  init)
+    if [ -f docker-compose.yml ]; then
+      _err "docker-compose.yml exists."
+    fi
+
+    if [ -f Dockerfile ]; then
+      _err "Dockerfile exists."
+    fi
+
+    if [ -d app ]; then
+      _err "app exists."
+    fi
+
+    echo """version: '3.6'
+
+services:
+  $project:
+    build: .
+    volumes:
+      - ./app:/app""" > docker-compose.yml
+
+    echo """FROM ubuntu:18.04
+
+RUN apt-get update && apt-get install -yq --no-install-recommends \\
+  nano curl wget inetutils-ping htop sudo
+
+WORKDIR /app
+COPY app .
+
+ENTRYPOINT [\"/app/entrypoint.sh\"]""" > Dockerfile
+
+    mkdir app
+
+    echo """#!/usr/bin/env bash
+set -euo pipefail
+
+_term() {
+  >&2 echo \"TERM\"
+  exit 0
+}
+trap \"_term\" TERM
+
+_err() {
+  >&2 echo \"err: \$*\"
+  exit 1
+}
+
+echo \"started\"
+tail -f /dev/null &
+wait \$!""" > app/entrypoint.sh
+
+    chmod +x app/entrypoint.sh
+  ;;
+  ""|up)
+    while true; do
+      docker-compose up --build --force-recreate
+      sleep 0.1
+    done
+  ;;
+  shell)
+    docker-compose exec "$project" bash
+  ;;
+  *)
+    _err "USAGE: init|up|shell"
+  ;;
+esac
