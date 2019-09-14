@@ -4,7 +4,7 @@ makes docker-compose usable
 
 ## install
 
-    ln -s $(pwd)/lnx /usr/local/bin
+    ln -s $(pwd)/doc /usr/local/bin
 
 ## usage
 
