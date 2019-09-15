@@ -83,6 +83,9 @@ wait \$!""" > app/entrypoint.sh
 
     chmod +x app/entrypoint.sh
   ;;
+  host:shell)
+    screen $HOME/Library/Containers/com.docker.docker/Data/vms/0/tty
+  ;;
   help)
     _usage
   ;;
@@ -167,15 +170,30 @@ case "${1:-}" in
     $0 build "$services_line"
     docker-compose up -d --force-recreate $services_line
   ;;
+  kill)
+    docker-compose kill $services_line
+  ;;
   stop)
     docker-compose stop --timeout 0 $services_line
+  ;;
+  rm)
+    docker-compose rm -f $services_line
   ;;
   logs)
     docker-compose logs --tail=10 $services_line
   ;;
-  shell)
-    #TODO: what
-    docker-compose exec "$project" "(bash || sh || ash || dash || zsh)"
+  tail|logs:tail)
+    docker-compose logs -f --tail=10 $services_line
+  ;;
+  shell|sh)
+    docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
+  ;;
+  shell:root|sh:root)
+    docker-compose exec --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
+  ;;
+  attach)
+    container=$(docker-compose ps -q "$2")
+    docker attach "$container"
   ;;
   port)
     if [ "${4:-}" = "" ]; then
