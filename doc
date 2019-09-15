@@ -11,8 +11,24 @@ _err() {
   >&2 echo "err: $*"
   exit 1
 }
+
+_usage() {
+  _err """USAGE:
+up
+build
+buildpush
+pull
+background|bg
+ps
+stop
+scale
+port
+"""
+}
+
 project=$(basename "$(pwd)")
 
+use_compose=0
 case "${1:-}" in
   init)
     if [ -f docker-compose.yml ]; then
@@ -67,14 +83,99 @@ wait \$!""" > app/entrypoint.sh
 
     chmod +x app/entrypoint.sh
   ;;
+  help)
+    _usage
+  ;;
+  *)
+    use_compose=1
+  ;;
+esac
+
+[ "$use_compose" = "0" ] && exit 0
+
+#----------------------------------------------------
+use_services=0
+case "${1:-}" in
+  ps)
+    docker-compose ps
+  ;;
+  scale)
+    docker-compose up -d --scale "$2=$3"
+  ;;
+  *)
+    use_services=1
+  ;;
+esac
+
+[ "$use_services" = "0" ] && exit 0
+
+#----------------------------------------------------
+if [ "${2:-}" = "" ]; then
+  services=$(docker-compose config --services)
+else
+  services=${*:2}
+fi
+
+services_line=$(echo $services)
+
+case "${1:-}" in
+  build)
+    for service in $services; do
+      (
+        docker-compose build $service
+      ) 2>&1 | sed -le "s#^#build $service: #;" &
+    done
+
+    wait $(jobs -p)
+  ;;
+  push)
+    for service in $services; do
+      (
+        docker-compose push "$service"
+      ) 2>&1 | sed -le "s#^#push $service: #;" &
+    done
+
+    wait $(jobs -p)
+  ;;
+  buildpush|bp)
+    for service in $services; do
+      (
+        $0 build "$service"
+        $0 push "$service"
+      ) 2>&1 | sed -le "s#^#buildpush $service: #;" &
+    done
+
+    wait $(jobs -p)
+  ;;
+  pull)
+    for service in $services; do
+      (
+        docker-compose pull "$service"
+      ) 2>&1 | sed -le "s#^#pull $service: #;" &
+    done
+
+    wait $(jobs -p)
+  ;;
   ""|up)
     while true; do
-      docker-compose up --build --force-recreate
+      $0 build "$services_line"
+      docker-compose up --force-recreate $services_line
       sleep 0.1
     done
   ;;
+  background|bg)
+    $0 build "$services_line"
+    docker-compose up -d --force-recreate $services_line
+  ;;
+  stop)
+    docker-compose stop --timeout 0 $services_line
+  ;;
+  logs)
+    docker-compose logs --tail=10 $services_line
+  ;;
   shell)
-    docker-compose exec "$project" bash
+    #TODO: what
+    docker-compose exec "$project" "(bash || sh || ash || dash || zsh)"
   ;;
   port)
     if [ "${4:-}" = "" ]; then
@@ -83,21 +184,18 @@ wait \$!""" > app/entrypoint.sh
       index=$4
     fi
 
-    docker-compose port --index=$index $2 $3
+    docker-compose port "--index=$index" "$2" "$3"
   ;;
-  scale)
-    docker-compose scale $2=$3
-  ;;
-  down|stop)
-    docker-compose stop
-  ;;
-  ps)
-    docker-compose ps
-  ;;
-  background)
-    docker-compose up --build --force-recreate -d
+  stats)
+    for service in $services; do
+      (
+        container=$(docker-compose ps -q $service)
+        docker stats --no-stream $container
+      ) 2>&1 | sed -le "s#^#stats $service: #;"
+      echo ""
+    done
   ;;
   *)
-    _err "USAGE: init|up|shell"
+    _usage
   ;;
 esac

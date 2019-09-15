@@ -13,3 +13,5 @@ makes docker-compose usable
     doc init
     doc up
     doc shell
+    doc buildpush
+    etc
