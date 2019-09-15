@@ -76,6 +76,27 @@ wait \$!""" > app/entrypoint.sh
   shell)
     docker-compose exec "$project" bash
   ;;
+  port)
+    if [ "${4:-}" = "" ]; then
+      index=1
+    else
+      index=$4
+    fi
+
+    docker-compose port --index=$index $2 $3
+  ;;
+  scale)
+    docker-compose scale $2=$3
+  ;;
+  down|stop)
+    docker-compose stop
+  ;;
+  ps)
+    docker-compose ps
+  ;;
+  background)
+    docker-compose up --build --force-recreate -d
+  ;;
   *)
     _err "USAGE: init|up|shell"
   ;;
