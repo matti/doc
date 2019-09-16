@@ -204,6 +204,9 @@ case "${1:-}" in
 
     docker-compose port "--index=$index" "$2" "$3"
   ;;
+  services)
+    echo "$services"
+  ;;
   stats)
     for service in $services; do
       (
