@@ -134,7 +134,10 @@ case "${1:-}" in
   push)
     for service in $services; do
       (
-        docker-compose push "$service"
+        while true; do
+          docker-compose push "$service" && break
+          sleep 1
+        done
       ) 2>&1 | sed -le "s#^#push $service: #;" &
     done
 
