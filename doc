@@ -5,8 +5,19 @@ _term() {
   >&2 echo "TERM"
   exit 0
 }
-trap "_term" TERM
+_int() {
+  >&2 echo "
+^C received"
+  set +e
+    kill $(jobs -p)
+    wait $(jobs -p)
+  set -e
 
+  exit 0
+}
+
+trap "_term" TERM
+trap "_int" INT
 _err() {
   >&2 echo "err: $*"
   exit 1
