@@ -174,9 +174,14 @@ case "${1:-}" in
     wait $(jobs -p)
   ;;
   ""|up)
+    _up_int() {
+      echo "reload"
+    }
+
+    trap "_up_int" INT
     while true; do
       $0 build "$services_line"
-      docker-compose up --force-recreate $services_line
+      docker-compose up --force-recreate $services_line || true
       sleep 0.1
     done
   ;;
@@ -200,7 +205,11 @@ case "${1:-}" in
     docker-compose logs -f --tail=10 $services_line
   ;;
   shell|sh)
-    docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
+    if [ "${3:-}" = "" ]; then
+      docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
+    else
+      docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash -c ${*:3}; exec sh -c ${*:3}"
+    fi
   ;;
   shell:root|sh:root)
     docker-compose exec --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
