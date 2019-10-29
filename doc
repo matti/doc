@@ -146,7 +146,9 @@ case "${1:-}" in
     for service in $services; do
       (
         while true; do
-          docker-compose push "$service" && break
+          docker-compose build "$service" 2>&1 | grep "uses an image, skipping" && break
+
+          docker push "$(docker-compose build "$service" | grep "Successfully tagged" | cut -d' ' -f3-)" && break
           sleep 1
         done
       ) 2>&1 | sed -le "s#^#push $service: #;" &
