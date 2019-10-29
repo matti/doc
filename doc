@@ -184,7 +184,7 @@ case "${1:-}" in
     while true; do
       $0 build "$services_line"
       docker-compose up --force-recreate $services_line || true
-      sleep 0.1
+      sleep 0.5
     done
   ;;
   background|bg)
