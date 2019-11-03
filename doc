@@ -132,6 +132,13 @@ fi
 
 services_line=$(echo $services)
 
+
+if [ "${2:-}" = "" ]; then
+  first_service=$(echo $services | cut -d' ' -f1)
+else
+  first_service="$2"
+fi
+
 case "${1:-}" in
   build)
     for service in $services; do
@@ -208,16 +215,16 @@ case "${1:-}" in
   ;;
   shell|sh)
     if [ "${3:-}" = "" ]; then
-      docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
+      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
     else
-      docker-compose exec "$2" "sh" "-c" "command -v bash >/dev/null && exec bash -c ${*:3}; exec sh -c ${*:3}"
+      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && exec bash -c ${*:3}; exec sh -c ${*:3}"
     fi
   ;;
   shell:root|sh:root)
     docker-compose exec --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
   ;;
   attach)
-    container=$(docker-compose ps -q "$2")
+    container=$(docker-compose ps -q "$first_service")
     docker attach "$container"
   ;;
   port)
