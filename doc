@@ -32,8 +32,10 @@ pull
 background|bg
 ps
 stop
+stop:all
 scale
 port
+down
 """
 }
 
@@ -204,6 +206,9 @@ case "${1:-}" in
   stop)
     docker-compose stop --timeout 0 $services_line
   ;;
+  stop:all)
+    docker ps -q | xargs docker stop -t 0
+  ;;
   rm)
     docker-compose rm -f $services_line
   ;;
@@ -247,6 +252,12 @@ case "${1:-}" in
       ) 2>&1 | sed -le "s#^#stats $service: #;"
       echo ""
     done
+  ;;
+  down)
+    docker-compose down -v -t 0
+  ;;
+  code)
+    code "$BASH_SOURCE"
   ;;
   *)
     _usage
