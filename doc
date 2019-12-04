@@ -145,7 +145,7 @@ case "${1:-}" in
   build)
     for service in $services; do
       (
-        docker-compose build $service
+        docker-compose build --compress $service
       ) 2>&1 | sed -le "s#^#build $service: #;" &
     done
 
