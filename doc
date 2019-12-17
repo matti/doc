@@ -8,12 +8,21 @@ _term() {
 _int() {
   >&2 echo "
 ^C received"
+
+  set +m
   set +e
-    kill $(jobs -p)
-    wait $(jobs -p)
-  set -e
+  kill $(jobs -p) >/dev/null 2>&1
+  wait $(jobs -p) >/dev/null 2>&1
 
   exit 0
+}
+
+_reload_int() {
+  trap "_int" INT
+
+  printf "\n\nreload\n"
+  sleep 0.25
+  trap "_reload_int" INT
 }
 
 trap "_term" TERM
