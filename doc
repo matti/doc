@@ -155,13 +155,22 @@ fi
 
 case "${1:-}" in
   build)
+    declare -A pids
+
     for service in $services; do
       (
         docker-compose build --compress $service
-      ) 2>&1 | sed -le "s#^#build $service: #;" &
+      ) >&1 | sed -le "s#^#build $service: #;" &
+      pids["$service"]=$!
     done
 
-    wait $(jobs -p)
+    for service in "${!pids[@]}"
+    do
+      pid=${pids["$service"]}
+      if ! wait $pid; then
+        echo "Building of$service failed"
+      fi
+    done
   ;;
   push)
     for service in $services; do
@@ -197,15 +206,20 @@ case "${1:-}" in
     wait $(jobs -p)
   ;;
   ""|up)
-    _up_int() {
-      echo "reload"
-    }
+    trap "_reload_int" INT
 
-    trap "_up_int" INT
     while true; do
       $0 build "$services_line"
-      docker-compose up --force-recreate $services_line || true
-      sleep 0.5
+      (
+        docker-compose up -t 0 --force-recreate $services_line || true
+      ) &
+      wait $! || true
+    done
+  ;;
+  run)
+    trap "_reload_int" INT
+    while true; do
+      docker-compose up -t 0 --force-recreate $services_line || true
     done
   ;;
   background|bg)
@@ -231,10 +245,16 @@ case "${1:-}" in
     docker-compose logs -f --tail=10 $services_line
   ;;
   shell|sh)
-    if [ "${3:-}" = "" ]; then
-      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && exec bash; exec sh"
+    if [ "${*:3}" = "" ]; then
+      cmd="exec bash; exec sh"
     else
-      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && exec bash -c ${*:3}; exec sh -c ${*:3}"
+      cmd="exec bash -c '${*:3}'; exec sh -c '${*:3}'"
+    fi
+
+    if [ "${2:-}" = "" ]; then
+      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
+    else
+      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
     fi
   ;;
   shell:root|sh:root)
@@ -267,9 +287,6 @@ case "${1:-}" in
   ;;
   down)
     docker-compose down -v -t 0
-  ;;
-  code)
-    code "$BASH_SOURCE"
   ;;
   *)
     _usage
