@@ -55,6 +55,9 @@ case "${1:-}" in
   code)
     code "$BASH_SOURCE"
   ;;
+  stop:all)
+    docker ps -q | xargs docker stop -t 0
+  ;;
   init)
     if [ -f docker-compose.yml ]; then
       _err "docker-compose.yml exists."
@@ -168,11 +171,13 @@ case "${1:-}" in
     do
       pid=${pids["$service"]}
       if ! wait $pid; then
-        echo "Building of$service failed"
+        echo "Building of $service failed"
       fi
     done
   ;;
   push)
+    declare -A pids
+
     for service in $services; do
       (
         while true; do
@@ -182,9 +187,16 @@ case "${1:-}" in
           sleep 1
         done
       ) 2>&1 | sed -le "s#^#push $service: #;" &
+      pids["$service"]=$!
     done
 
-    wait $(jobs -p)
+    for service in "${!pids[@]}"
+    do
+      pid=${pids["$service"]}
+      if ! wait $pid; then
+        echo "Building of $service failed"
+      fi
+    done
   ;;
   buildpush|bp)
     for service in $services; do
@@ -231,9 +243,6 @@ case "${1:-}" in
   ;;
   stop)
     docker-compose stop --timeout 0 $services_line
-  ;;
-  stop:all)
-    docker ps -q | xargs docker stop -t 0
   ;;
   rm)
     docker-compose rm -f $services_line
