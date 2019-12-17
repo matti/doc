@@ -52,6 +52,9 @@ project=$(basename "$(pwd)")
 
 use_compose=0
 case "${1:-}" in
+  code)
+    code "$BASH_SOURCE"
+  ;;
   init)
     if [ -f docker-compose.yml ]; then
       _err "docker-compose.yml exists."
