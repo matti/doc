@@ -269,6 +269,9 @@ case "${1:-}" in
   shell:root|sh:root)
     docker-compose exec --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
   ;;
+  restart)
+    docker-compose restart -t0 $services_line
+  ;;
   attach)
     container=$(docker-compose ps -q "$first_service")
     docker attach "$container"
@@ -286,13 +289,8 @@ case "${1:-}" in
     echo "$services"
   ;;
   stats)
-    for service in $services; do
-      (
-        container=$(docker-compose ps -q $service)
-        docker stats --no-stream $container
-      ) 2>&1 | sed -le "s#^#stats $service: #;"
-      echo ""
-    done
+    containers=$(docker-compose ps -q)
+    docker stats --no-stream $containers
   ;;
   down)
     docker-compose down -v -t 0
