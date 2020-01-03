@@ -254,6 +254,13 @@ case "${1:-}" in
     docker-compose logs -f --tail=10 $services_line
   ;;
   shell|sh)
+    DOC_INDEX=1
+    if [ "${3:-}" = "--index" ]; then
+      shift
+      DOC_INDEX=$3
+      shift
+    fi
+
     if [ "${*:3}" = "" ]; then
       cmd="exec bash; exec sh"
     else
@@ -261,9 +268,9 @@ case "${1:-}" in
     fi
 
     if [ "${2:-}" = "" ]; then
-      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
+      docker-compose exec --index $DOC_INDEX "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
     else
-      docker-compose exec "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
+      docker-compose exec --index $DOC_INDEX "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
     fi
   ;;
   shell:root|sh:root)
