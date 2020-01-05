@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.0.0"
+    echo "1.1.0"
   ;;
   ps)
     docker-compose ps
@@ -303,7 +303,11 @@ case "${1:-}" in
     docker stats --no-stream $containers
   ;;
   down)
-    docker-compose down -v -t 0
+    # ERROR: error while removing network: .. has active endpoints
+    while true; do
+      docker-compose down -v -t 0 && break
+      sleep 1
+    done
   ;;
   *)
     _usage
