@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.1.0"
+    echo "1.1.1"
   ;;
   ps)
     docker-compose ps
@@ -250,11 +250,26 @@ case "${1:-}" in
   rm)
     docker-compose rm -f $services_line
   ;;
-  logs)
-    docker-compose logs --tail=10 $services_line
-  ;;
-  tail|logs:tail)
-    docker-compose logs -f --tail=10 $services_line
+  logs|tail|logs:tail)
+    log_opts=""
+    tail=10
+
+    case "$1" in
+      tail|logs:tail)
+        log_opts="$log_opts -f"
+      ;;
+    esac
+
+    for arg in "${@:2}"; do
+      case $arg in
+        --tail=*)
+          tail=${arg#*=}
+          services_line="${services_line#* }"
+        ;;
+      esac
+    done
+
+    docker-compose logs $log_opts --tail=$tail $services_line
   ;;
   shell|sh)
     DOC_INDEX=1
