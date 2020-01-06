@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.1.1"
+    echo "1.2.0"
   ;;
   ps)
     docker-compose ps
@@ -219,6 +219,27 @@ case "${1:-}" in
     done
 
     wait $(jobs -p)
+  ;;
+  services:except)
+    services_all=$(docker-compose config --services)
+
+    services_wanted=""
+    for service in $services_all; do
+      unwanted=false
+      for unwanted_service in ${@:2}; do
+        [ "$service" = "$unwanted_service" ] && unwanted=true
+      done
+      [ "$unwanted" = true ] && continue
+
+      services_wanted="$services_wanted $service"
+    done
+
+    echo $services_wanted
+  ;;
+  up:without|run:without)
+    services_wanted=$($0 services:except ${@:2})
+
+    echo $0 $1 $services_wanted
   ;;
   ""|up)
     trap "_reload_int" INT
