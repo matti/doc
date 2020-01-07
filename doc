@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.2.0"
+    echo "1.3.0"
   ;;
   ps)
     docker-compose ps
@@ -261,6 +261,9 @@ case "${1:-}" in
   background|bg)
     $0 build "$services_line"
     docker-compose up -d --force-recreate $services_line
+  ;;
+  background:ensure|bg:ensure)
+    docker-compose up -d $services_line
   ;;
   kill)
     docker-compose kill $services_line
