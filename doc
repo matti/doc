@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.5.0"
+    echo "1.6.0"
   ;;
   ps)
     docker-compose ps
@@ -148,6 +148,9 @@ opts=""
 args=""
 for arg in ${@:2}; do
   case $arg in
+    --)
+      break
+    ;;
     -*)
       opts="$opts $arg"
     ;;
@@ -155,6 +158,18 @@ for arg in ${@:2}; do
       args="${args}${arg} "
     ;;
   esac
+done
+
+args_shell=""
+for arg in ${@:3}; do
+  case $arg in
+    --)
+      args_shell=""
+      continue
+    ;;
+  esac
+
+  args_shell="${args_shell}${arg} "
 done
 
 case $args in
@@ -306,17 +321,13 @@ case "${1:-}" in
     docker-compose logs $opts $services_line
   ;;
   shell|sh)
-    if [ "${*:3}" = "" ]; then
+    if [ "${args_shell}" = "" ]; then
       cmd="exec bash; exec sh"
     else
-      cmd="exec bash -c '${*:3}'; exec sh -c '${*:3}'"
+      cmd="exec bash -c '${args_shell}'; exec sh -c '${args_shell}'"
     fi
 
-    if [ "${2:-}" = "" ]; then
-      docker-compose exec $opts "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
-    else
-      docker-compose exec $opts "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
-    fi
+    docker-compose exec $opts "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
   ;;
   shell:root|sh:root)
     docker-compose exec $opts --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
