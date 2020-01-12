@@ -128,7 +128,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.4.0"
+    echo "1.5.0"
   ;;
   ps)
     docker-compose ps
@@ -144,31 +144,41 @@ esac
 [ "$use_services" = "0" ] && exit 0
 
 #----------------------------------------------------
-if [ "${2:-}" = "" ]; then
-  services=$(docker-compose config --services)
-else
-  services=${*:2}
-fi
+opts=""
+args=""
+for arg in ${@:2}; do
+  case $arg in
+    -*)
+      opts="$opts $arg"
+    ;;
+    *)
+      args="${args}${arg} "
+    ;;
+  esac
+done
 
-services_line=$(echo $services)
-
-
-if [ "${2:-}" = "" ]; then
-  first_service=$(echo $services | cut -d' ' -f1)
-else
-  first_service="$2"
-fi
+case $args in
+  "")
+    services=$(docker-compose config --services)
+    services_line=$(echo $services)
+    first_service="${services_line%% *}"
+  ;;
+  *)
+    services=$args
+    services_line=$args
+    first_service="${services_line%% *}"
+  ;;
+esac
 
 case "${1:-}" in
   build)
     declare -A pids
-
     for service in $services; do
       (
         while true; do
           set +e
             # 2>&1 redir is needed because "uses an image, skipping" goes to stderr
-            2>&1 docker-compose build --compress "$service" | tee /dev/stderr | grep "uses an image, skipping\|Successfully tagged" && break
+            2>&1 docker-compose build $opts --compress "$service" | tee /dev/stderr | grep "uses an image, skipping\|Successfully tagged" && break
           set -e
 
           echo "build retry"
@@ -232,7 +242,7 @@ case "${1:-}" in
   pull)
     for service in $services; do
       (
-        docker-compose pull "$service"
+        docker-compose pull $opts "$service"
       ) 2>&1 | sed -le "s#^#pull $service: #;" &
     done
 
@@ -284,43 +294,18 @@ case "${1:-}" in
     docker-compose up -d $services_line
   ;;
   kill)
-    docker-compose kill $services_line
+    docker-compose kill $opts $services_line
   ;;
   stop)
-    docker-compose stop --timeout 0 $services_line
+    docker-compose stop $opts --timeout 0 $services_line
   ;;
   rm)
-    docker-compose rm -f $services_line
+    docker-compose rm $opts -f $services_line
   ;;
   logs|tail|logs:tail)
-    log_opts=""
-    tail=10
-
-    case "$1" in
-      tail|logs:tail)
-        log_opts="$log_opts -f"
-      ;;
-    esac
-
-    for arg in "${@:2}"; do
-      case $arg in
-        --tail=*)
-          tail=${arg#*=}
-          services_line="${services_line#* }"
-        ;;
-      esac
-    done
-
-    docker-compose logs $log_opts --tail=$tail $services_line
+    docker-compose logs $opts $services_line
   ;;
   shell|sh)
-    DOC_INDEX=1
-    if [ "${3:-}" = "--index" ]; then
-      shift
-      DOC_INDEX=$3
-      shift
-    fi
-
     if [ "${*:3}" = "" ]; then
       cmd="exec bash; exec sh"
     else
@@ -328,29 +313,23 @@ case "${1:-}" in
     fi
 
     if [ "${2:-}" = "" ]; then
-      docker-compose exec --index $DOC_INDEX "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
+      docker-compose exec $opts "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
     else
-      docker-compose exec --index $DOC_INDEX "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
+      docker-compose exec $opts "$first_service" "sh" "-c" "command -v bash >/dev/null && $cmd"
     fi
   ;;
   shell:root|sh:root)
-    docker-compose exec --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
+    docker-compose exec $opts --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
   ;;
   restart)
-    docker-compose restart -t0 $services_line
+    docker-compose restart $opts -t0 $services_line
   ;;
   attach)
     container=$(docker-compose ps -q "$first_service")
     docker attach "$container"
   ;;
   port)
-    if [ "${4:-}" = "" ]; then
-      index=1
-    else
-      index=$4
-    fi
-
-    docker-compose port "--index=$index" "$2" "$3"
+    docker-compose port $opts "$2" "$3"
   ;;
   services)
     echo "$services"
@@ -362,9 +341,10 @@ case "${1:-}" in
   down)
     # ERROR: error while removing network: .. has active endpoints
     while true; do
-      docker-compose down -v -t 0 && break
+      docker-compose down $opts -v -t 0 && break
       sleep 1
     done
+    echo "done"
   ;;
   *)
     _usage
