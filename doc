@@ -43,6 +43,8 @@ ps
 stop
 stop:all
 scale
+services
+services:except SERVICE1 SERVICE2
 port
 down
 """
@@ -128,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.6.0"
+    echo "1.7.0"
   ;;
   ps)
     docker-compose ps
@@ -199,7 +201,7 @@ case "${1:-}" in
           echo "build retry"
           sleep 1
         done
-      ) >&1 | sed -le "s#^#build $service: #;" &
+      ) 2>&1 | sed -le "s#^#build $service: #;" &
       pids["$service"]=$!
     done
 
@@ -257,7 +259,7 @@ case "${1:-}" in
   pull)
     for service in $services; do
       (
-        docker-compose pull $opts "$service"
+        docker-compose --no-ansi pull $opts "$service"
       ) 2>&1 | sed -le "s#^#pull $service: #;" &
     done
 
