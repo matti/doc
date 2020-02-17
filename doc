@@ -28,12 +28,12 @@ _reload_int() {
 trap "_term" TERM
 trap "_int" INT
 _err() {
-  >&2 echo "err: $*"
+  >&2 echo "🚫 : $*"
   exit 1
 }
 
 _usage() {
-  _err """USAGE:
+  echo """USAGE:
 up
 build
 buildpush
@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.9.0"
+    echo "1.9.1"
   ;;
   ps)
     docker-compose ps
@@ -233,17 +233,14 @@ case "${1:-}" in
 
     for service in $services; do
       image=$($0 image $service)
-      echo wat: $image
       if [ "$image" = "" ]; then
         echo "not tagged, not pushing"
         break
       fi
-
       (
-        while true; do
-          docker push "$image" && break
-          sleep 1
-        done
+        echo "🐳 pushing $image"
+        docker push "$image"
+        echo "🐳 pushed $image"
       ) 2>&1 | sed -le "s#^#push $image: #;" &
       pids["$service"]=$!
     done
@@ -252,7 +249,7 @@ case "${1:-}" in
     do
       pid=${pids["$service"]}
       if ! wait $pid; then
-        echo "Pushing of $service failed"
+        _err "🚫 pushing of $service failed"
       fi
     done
   ;;
@@ -274,7 +271,7 @@ case "${1:-}" in
         continue
       fi
 
-      cache_froms_with_interpolations=$(echo $docker_compose_json | jq -r ".services | .${service} | .build | .cache_from[]")
+      cache_froms_with_interpolations=$(echo $docker_compose_json | jq -r ".services | .[\"${service}\"]? | .build | .cache_from[]")
       set +u
         cache_froms=$(eval echo $cache_froms_with_interpolations)
       set -u
@@ -288,10 +285,11 @@ case "${1:-}" in
   ;;
   image)
     for service in $services; do
-      image_with_interpolations=$(echo $docker_compose_json | jq -r ".services.$service.image" | xargs)
+      image_with_interpolations=$(echo $docker_compose_json | jq -r ".services | .[\"${service}\"]? | .image?" | xargs)
       [ "$image_with_interpolations" = "null" ] && continue
 
-      eval echo $image_with_interpolations
+      image=$(eval echo $image_with_interpolations)
+      [ "$image" != "" ] && echo "$image"
     done
   ;;
   pull)
