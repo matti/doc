@@ -130,13 +130,17 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.7.0"
+    echo "1.8.1"
   ;;
   ps)
     docker-compose ps
   ;;
   scale)
     docker-compose up -d --scale "$2=$3"
+  ;;
+  tag)
+    image=$($0 image $2)
+    docker tag $image $3
   ;;
   *)
     use_services=1
@@ -174,16 +178,21 @@ for arg in ${@:3}; do
   args_shell="${args_shell}${arg} "
 done
 
+if [ -f "docker-compose.yml" ]; then
+  docker_compose_json=$(yq r -j docker-compose.yml)
+else
+  docker_compose_json=""
+fi
+
+
 case $args in
   "")
-    services=$(docker-compose config --services)
-    services_line=$(echo $services)
-    first_service="${services_line%% *}"
+    services=$(echo $docker_compose_json | jq -r '.services | keys[]' | xargs)
+    first_service=$(printf $services)
   ;;
   *)
     services=$args
-    services_line=$args
-    first_service="${services_line%% *}"
+    first_service="${services%% *}"
   ;;
 esac
 
@@ -191,16 +200,21 @@ case "${1:-}" in
   build)
     declare -A pids
     for service in $services; do
-      (
-        while true; do
-          set +e
-            # 2>&1 redir is needed because "uses an image, skipping" goes to stderr
-            2>&1 docker-compose build $opts --compress "$service" | tee /dev/stderr | grep "uses an image, skipping\|Successfully tagged" && break
-          set -e
+      image=$(doc image $service)
+      [ "$image" = "" ] && continue
 
-          echo "build retry"
-          sleep 1
-        done
+      (
+        echo "🐳 building $image"
+        cache_froms=$($0 cache_from $service)
+        if [ "$cache_froms" != "" ]; then
+          echo "using cache_froms:"
+          for cache_from in $cache_froms; do
+            echo $cache_from
+          done
+        fi
+
+        docker-compose --no-ansi build --compress $service
+        echo "🐳 built $image"
       ) 2>&1 | sed -le "s#^#build $service: #;" &
       pids["$service"]=$!
     done
@@ -218,23 +232,19 @@ case "${1:-}" in
     declare -A pids
 
     for service in $services; do
+      image=$($0 image $service)
+      echo wat: $image
+      if [ "$image" = "" ]; then
+        echo "not tagged, not pushing"
+        break
+      fi
+
       (
         while true; do
-          # the only way to get image nicely
-          # set +e required if no image is tagged
-          set +e
-            image="$(2>&1 docker-compose build --compress "$service" | grep "Successfully tagged" | cut -d' ' -f3-)"
-          set -e
-
-          if [ "$image" = "" ]; then
-            echo "not tagged, not pushing"
-            break
-          fi
-
           docker push "$image" && break
           sleep 1
         done
-      ) 2>&1 | sed -le "s#^#push $service: #;" &
+      ) 2>&1 | sed -le "s#^#push $image: #;" &
       pids["$service"]=$!
     done
 
@@ -256,11 +266,66 @@ case "${1:-}" in
 
     wait $(jobs -p)
   ;;
+  cache_from)
+    for service in $services; do
+      build_key_type=$(echo $docker_compose_json | jq -r ".services | .${service}? | .build[]? | type" | xargs)
+
+      if [ "$build_key_type" != "array string" ]; then
+        continue
+      fi
+
+      cache_froms_with_interpolations=$(echo $docker_compose_json | jq -r ".services | .${service} | .build | .cache_from[]")
+      set +u
+        cache_froms=$(eval echo $cache_froms_with_interpolations)
+      set -u
+      for cache_from in $cache_froms; do
+        tag="${cache_from#*:}"
+        if [ "$tag" != "" ]; then
+          echo $cache_from
+        fi
+      done
+    done
+  ;;
+  image)
+    for service in $services; do
+      image_with_interpolations=$(echo $docker_compose_json | jq -r ".services.$service.image" | xargs)
+      [ "$image_with_interpolations" = "null" ] && continue
+
+      eval echo $image_with_interpolations
+    done
+  ;;
   pull)
+    _pull() {
+      [ "${1:-}" = "" ] && return
+
+      echo "🐳 pulling $1"
+      while true; do
+        2>&1 docker pull $1 | tee /dev/stderr | grep "ERROR: gcloud crashed (OperationalError): database is locked" || break
+        sleep 1
+      done
+      echo "🐳 pulled $1"
+    }
+
     for service in $services; do
       (
-        docker-compose --no-ansi pull $opts "$service"
-      ) 2>&1 | sed -le "s#^#pull $service: #;" &
+        image=$($0 image $service)
+        (
+          _pull $image
+        ) 2>&1 | sed -le "s#^#pull image $image: #;"
+
+        image_in_daemon=$(docker images -q $image)
+
+        # only pull cache-froms unless image tag is found
+        if [ "$image_in_daemon" = "" ]; then
+          cache_froms=$($0 cache_from $service)
+          for cache_from in $cache_froms; do
+            # Pull one by one to re-use layers
+            (
+              _pull $cache_from
+            ) 2>&1 | sed -le "s#^#pull cache_from $cache_from: #;"
+          done
+        fi
+      ) 2>&1 | sed -le "s#^#$service: #;" &
     done
 
     wait $(jobs -p)
@@ -290,9 +355,9 @@ case "${1:-}" in
     trap "_reload_int" INT
 
     while true; do
-      $0 build "$services_line"
+      $0 build "$services"
       (
-        docker-compose up -t 0 --force-recreate $services_line || true
+        docker-compose up -t 0 --force-recreate $services || true
       ) &
       wait $! || true
     done
@@ -300,27 +365,27 @@ case "${1:-}" in
   run)
     trap "_reload_int" INT
     while true; do
-      docker-compose up -t 0 --force-recreate $services_line || true
+      docker-compose up -t 0 --force-recreate $services || true
     done
   ;;
   background|bg)
-    $0 build "$services_line"
-    docker-compose up -d --force-recreate $services_line
+    $0 build "$services"
+    docker-compose up -d --force-recreate $services
   ;;
   background:ensure|bg:ensure)
-    docker-compose up -d $services_line
+    docker-compose up -d $services
   ;;
   kill)
-    docker-compose kill $opts $services_line
+    docker-compose kill $opts $services
   ;;
   stop)
-    docker-compose stop $opts --timeout 0 $services_line
+    docker-compose stop $opts --timeout 0 $services
   ;;
   rm)
-    docker-compose rm $opts -f $services_line
+    docker-compose rm $opts -f $services
   ;;
   logs|tail|logs:tail)
-    docker-compose logs $opts $services_line
+    docker-compose logs $opts $services
   ;;
   shell|sh)
     if [ "${args_shell}" = "" ]; then
@@ -335,7 +400,7 @@ case "${1:-}" in
     docker-compose exec $opts --privileged --user 0 "$2" "bash || sh || ash || dash || zsh"
   ;;
   restart)
-    docker-compose restart $opts -t0 $services_line
+    docker-compose restart $opts -t0 $services
   ;;
   attach)
     container=$(docker-compose ps -q "$first_service")
