@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.10.0"
+    echo "1.11.0"
   ;;
   ps)
     docker-compose ps
@@ -204,6 +204,8 @@ case "${1:-}" in
       [ "$image" = "" ] && continue
 
       (
+        echo "pull"
+        $0 pull $service
         echo "🐳 building $image"
         cache_froms=$($0 cache_from $service)
         if [ "$cache_froms" != "" ]; then
@@ -296,17 +298,17 @@ case "${1:-}" in
     _pull() {
       [ "${1:-}" = "" ] && return
 
-      echo "🐳 pulling $1"
-      pull_error=0
-      while true; do
-        2>&1 docker pull $1 | tee /dev/stderr | grep "ERROR: gcloud crashed (OperationalError): database is locked" || break
-        sleep 1
-      done
-
-      if [ "$(docker images -q $1)" != "" ]; then
-        echo "🐳 pulled $1"
+      if [ "$(docker images -q $1)" = "" ]; then
+        echo "🐳 pulling $1"
+        while true; do
+          2>&1 docker pull $1 | tee /dev/stderr | grep "ERROR: gcloud crashed (OperationalError): database is locked" || break
+          sleep 1
+        done
+        if [ "$(docker images -q $1)" = "" ]; then
+          echo "🚫 error while pulling $1"
+        fi
       else
-        echo "🚫 error while pulling $1"
+        echo "🆗 already exists $1"
       fi
     }
 
