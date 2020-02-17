@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.8.1"
+    echo "1.9.0"
   ;;
   ps)
     docker-compose ps
@@ -299,11 +299,17 @@ case "${1:-}" in
       [ "${1:-}" = "" ] && return
 
       echo "🐳 pulling $1"
+      pull_error=0
       while true; do
         2>&1 docker pull $1 | tee /dev/stderr | grep "ERROR: gcloud crashed (OperationalError): database is locked" || break
         sleep 1
       done
-      echo "🐳 pulled $1"
+
+      if [ "$(docker images -q $1)" != "" ]; then
+        echo "🐳 pulled $1"
+      else
+        echo "🚫 error while pulling $1"
+      fi
     }
 
     for service in $services; do
@@ -319,6 +325,8 @@ case "${1:-}" in
         if [ "$image_in_daemon" = "" ]; then
           cache_froms=$($0 cache_from $service)
           for cache_from in $cache_froms; do
+            [ "$cache_from" = "$image" ] && continue
+
             # Pull one by one to re-use layers
             (
               _pull $cache_from
