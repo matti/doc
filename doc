@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.9.1"
+    echo "1.10.0"
   ;;
   ps)
     docker-compose ps
@@ -213,7 +213,7 @@ case "${1:-}" in
           done
         fi
 
-        docker-compose --no-ansi build --compress $service
+        docker-compose --no-ansi build $service
         echo "🐳 built $image"
       ) 2>&1 | sed -le "s#^#build $service: #;" &
       pids["$service"]=$!
