@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.11.0"
+    echo "1.11.1"
   ;;
   ps)
     docker-compose ps
@@ -267,7 +267,7 @@ case "${1:-}" in
   ;;
   cache_from)
     for service in $services; do
-      build_key_type=$(echo $docker_compose_json | jq -r ".services | .${service}? | .build[]? | type" | xargs)
+      build_key_type=$(echo $docker_compose_json | jq -r ".services | .[\"${service}\"]? | .build[]? | type" | xargs)
 
       if [ "$build_key_type" != "array string" ]; then
         continue
