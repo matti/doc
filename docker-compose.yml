@@ -3,4 +3,4 @@ version: "3.6"
 services:
   doc:
     build: .
-    image: mattipaksula/doc:1.11.1
+    image: mattipaksula/doc:1.12.0
