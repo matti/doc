@@ -130,7 +130,7 @@ esac
 use_services=0
 case "${1:-}" in
   version)
-    echo "1.11.1"
+    echo "1.12.0"
   ;;
   ps)
     docker-compose ps
@@ -187,8 +187,9 @@ fi
 
 case $args in
   "")
-    services=$(echo $docker_compose_json | jq -r '.services | keys[]' | xargs)
-    first_service=$(printf $services)
+    # use docker-compose to maintain order
+    services=$(docker-compose config --services | xargs)
+    first_service=${services%% *}
   ;;
   *)
     services=$args
@@ -200,23 +201,24 @@ case "${1:-}" in
   build)
     declare -A pids
     for service in $services; do
-      image=$(doc image $service)
-      [ "$image" = "" ] && continue
-
       (
-        echo "pull"
-        $0 pull $service
-        echo "🐳 building $image"
-        cache_froms=$($0 cache_from $service)
-        if [ "$cache_froms" != "" ]; then
-          echo "using cache_froms:"
-          for cache_from in $cache_froms; do
-            echo $cache_from
-          done
+        image=$(doc image $service)
+        if [ "$image" != "" ]; then
+          echo "🐳 pulling image and cache_froms"
+          $0 pull $service
+
+          cache_froms=$($0 cache_from $service)
+          if [ "$cache_froms" != "" ]; then
+            echo "using cache_froms:"
+            for cache_from in $cache_froms; do
+              echo $cache_from
+            done
+          fi
         fi
 
+        echo "🐳 building $service"
         docker-compose --no-ansi build $service
-        echo "🐳 built $image"
+        echo "🐳 built $service"
       ) 2>&1 | sed -le "s#^#build $service: #;" &
       pids["$service"]=$!
     done
@@ -363,6 +365,7 @@ case "${1:-}" in
     trap "_reload_int" INT
 
     while true; do
+      echo $services
       $0 build "$services"
       (
         docker-compose up -t 0 --force-recreate $services || true
